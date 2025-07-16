@@ -26,7 +26,8 @@ class handleFileController extends Controller
         $getExtension = $request->file('formFile')->getClientOriginalExtension();
 
         // rename image
-        $renameImage = 'original' . '_' . time() . '.' . $getExtension;
+        // $renameImage = 'original' . '_' . time() . '.' . $getExtension;
+        $renameImage = 'original.jpg';
 
         // save the image to the directory application
         $path = $validated['formFile']->storeAs('original', $renameImage, 'public');
@@ -48,53 +49,144 @@ class handleFileController extends Controller
     {
         $manager = new ImageManager(new Driver());
 
-        // read file from directory application
-        $fileToCompress = $manager->read($filePath);
-
-        $width = $fileToCompress->width();
-        $height = $fileToCompress->height();
-        $currentImageSize = filesize($filePath);
-
-        // dd($width, $height, $currentImageSize);
-
-        // compressing process
-        $tempPath = storage_path('app/temp_compress.jpg');
-        $quality = 100;
-        $minQuality = 1;
-        $step = 1000;
+        // ambil ukuran gambar asli
+        $originalImage = $manager->read($filePath);
+        $originalWidth = $originalImage->width();
+        $originalHeight = $originalImage->height();
 
         $targetBytes = $compressSize * 1024;
+        $tempPath = storage_path('app/temp_compress.jpg');
 
-        while ($targetBytes < $currentImageSize) {
-            $fileToCompress->scale(height: $height - $step, width: $width - $step);
-            $fileToCompress->save($tempPath, quality: $quality);
+        $quality = 90;
+        $minQuality = 30;
+        $stepQuality = 5;
+
+        $scaleFactor = 1.0; // 100%
+        $minScale = 0.1;    // Jangan kurang dari 10%
+        $stepScale = 0.05;  // Turunkan 5% per iterasi
+
+        $iteration = 0;
+        $currentImageSize = filesize($filePath);
+
+        while ($currentImageSize > $targetBytes && $quality >= $minQuality && $scaleFactor > $minScale) {
+
+            // Selalu mulai dari file asli
+            $image = $manager->read($filePath);
+
+            // Hitung ukuran baru berdasarkan scale factor
+            $newWidth = intval($originalWidth * $scaleFactor);
+            $newHeight = intval($originalHeight * $scaleFactor);
+
+            // Resize proporsional
+            $image->scale(width: $newWidth, height: $newHeight);
+
+            // Simpan dengan kualitas saat ini
+            $image->save($tempPath, quality: $quality);
+
+            // Cek ukuran file hasil kompres
             $currentImageSize = filesize($tempPath);
+
+            // Turunkan scale dan quality untuk iterasi berikutnya
+            $scaleFactor -= $stepScale;
+            $quality -= $stepQuality;
+            $iteration++;
+
+            // Debug jika ingin tahu progres
+            if ($iteration == 8) {
+                dd("iteration: $iteration | size: " . ($currentImageSize / 1024) . " KB | quality: $quality | scale: $scaleFactor" . " | Target: " . $targetBytes);
+            }
+
+            // Cegah loop tanpa akhir
+            if ($iteration > 20) {
+                break;
+            }
         }
 
-        // $downScaleImage = $fileToCompress->scale(height: 600);
-
-        // $fileToCompress->save($)
-
-        // Ulangi penurunan kualitas sampai ukuran mendekati target
-        // while ($currentSizeInBytes > $targetBytes && $quality >= $minQuality) {
-        //     $fileToCompress->save($tempPath, quality: $quality);
-        //     $currentSizeInBytes = filesize($tempPath);
-        //     $quality -= $step;
-        // }
-
-        //rename image
-        $fileName = 'compressed' . '_' . time() . '.jpg';
-
-        // get the path of image in application directory
+        // Simpan hasil akhir
+        $fileName = 'compressed.jpg';
         $savePath = storage_path('/app/public/compressed/' . $fileName);
-
-        // copy the final image compress that in temporary directory to permanent directory
-        // copy($tempPath, $savePath);
-        $fileToCompress->save($savePath, quality: 100);
-
-        // delete all loop temporary image
+        copy($tempPath, $savePath);
         unlink($tempPath);
 
         return asset('storage/compressed/' . $fileName);
     }
+
+
+    // public function compressFile($filePath, $compressSize)
+    // {
+    //     $manager = new ImageManager(new Driver());
+
+    //     // read file from directory application
+    //     $fileToCompress = $manager->read($filePath);
+
+    //     $width = $fileToCompress->width();
+    //     $height = $fileToCompress->height(); // 3541
+    //     $currentImageSize = filesize($filePath);
+
+    //     $targetBytes = $compressSize * 1024;
+
+    //     // $length = strlen($width);
+    //     $minus = null;
+
+    //     if ($height >= 1000 && $height <= 2000) {
+    //         $minus = 100; // true
+    //     } elseif ($height > 1000) {
+    //         $minus = 1000;
+    //     } elseif ($height >= 100 && $height < 1000) {
+    //         $minus = 50;
+    //     }
+
+    //     // compressing process
+    //     $tempPath = storage_path('app/temp_compress.jpg');
+    //     $quality = 90;
+    //     $minQuality = 30;
+    //     $stepQuality = 5;
+
+
+    //     $itteration = 0;
+    //     while ($currentImageSize >= $targetBytes && $quality >= $minQuality) {
+    //         $fileToCompress = $manager->read($filePath);
+
+    //         // scale & quality
+    //         $fileToCompress->scale(height: $height -= $minus);
+    //         $fileToCompress->save($tempPath, quality: $quality);
+    //         if ($height >= 1000 && $height <= 2000) {
+    //             $minus = 100; // true
+    //         } elseif ($height > 1000) {
+    //             $minus = 1000;
+    //         } elseif ($height >= 100 && $height < 1000) {
+    //             $minus = 50;
+    //         }
+    //         $currentImageSize = filesize($tempPath);
+    //         $quality -= $stepQuality;
+    //         $itteration++;
+    //         if ($itteration > 20) {
+    //             break;
+    //         }
+    //         if ($itteration == 1) {
+    //             dd('itteration : ' . $itteration, 'height : ' . $height, 'quality : ' . $quality, 'size : ' . $currentImageSize / 1024, 'target size : ' . $targetBytes / 1024);
+    //         }
+    //     }
+
+    //     //rename image
+    //     // $fileName = 'compressed' . '_' . time() . '.jpg';
+    //     $fileName = 'compressed.jpg';
+
+    //     // get the path of image in application directory
+    //     $savePath = storage_path('/app/public/compressed/' . $fileName);
+
+
+
+    //     // copy the final image compress that in temporary directory to permanent directory
+    //     copy($tempPath, $savePath);
+
+
+    //     // delete all loop temporary image
+    //     unlink($tempPath);
+
+    //     // dd('iteration : ' . $itteration, 'height : ' . $height);
+
+
+    //     return asset('storage/compressed/' . $fileName);
+    // }
 }
